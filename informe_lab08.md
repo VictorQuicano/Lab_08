@@ -1,3 +1,191 @@
+# Laboratorio 8 - Descubrimiento de Motifs
+
+**Curso:** Bioinformatica - Escuela Profesional de Ciencia de la Computacion (UNSA)
+
+## 1. Objetivo
+
+Analizar conjuntos de secuencias de ADN para identificar un **motif conservado**:
+una subsecuencia corta que aparece de forma recurrente y que suele asociarse a una
+funcion biologica. El procedimiento sigue los pasos del laboratorio: seleccionar
+k-mers candidatos, localizar sus ocurrencias, extraer la region comun, alinearla,
+construir la matriz de frecuencias, derivar la secuencia consenso, evaluar la
+conservacion y reportar el motif.
+
+El core esta implementado en C++ (`motif_discovery.cpp`) y las visualizaciones e
+informe HTML en Python (`visualizar.py`).
+
+## 2. Metodologia
+
+### Lectura de secuencias
+Cada conjunto se lee desde un archivo FASTA (`data/ejercicio1.fasta` y
+`data/anexo1.fasta`). Las bases se pasan a mayusculas y se filtran a `{A,C,G,T}`.
+
+### Seleccion de k-mers candidatos (k = 7, 8, 9)
+Para cada k se cuenta cada k-mer con una **ventana deslizante** y se calculan dos
+metricas:
+
+- **total**: numero de apariciones sumando todas las secuencias.
+- **cobertura**: numero de secuencias distintas en las que aparece.
+
+Se reportan dos rankings:
+
+1. **Ranking ingenuo** (por frecuencia total). En secuencias con mucho ruido
+   repetido (Anexo 1) este ranking lo dominan los repetidos de fondo, **no** el
+   motif.
+2. **Ranking discriminante**. Un motif conservado tiende a aparecer **~una vez por
+   secuencia en (casi) todas las secuencias**, mientras que un repetido de fondo
+   aparece muchas veces dentro de cada secuencia. Por eso se filtran los k-mers con
+   media de apariciones por secuencia `total/cobertura <= 1.5` y se ordenan por
+   cobertura (mas secuencias primero). Este ranking aisla el motif.
+
+### Ancla, extraccion y longitud del motif
+El nucleo conservado (k = 7) sirve de **ancla** para ubicar el motif en cada
+secuencia. El ancla elegida es la de mayor cobertura y, a igualdad, la que aparece
+mas a la izquierda en promedio: en ambos conjuntos resulta `TACGATG`. La longitud
+del motif se determina extendiendo el ancla hacia la derecha mientras el prefijo
+conservado siga apareciendo en al menos 2 secuencias (limite k = 9): en ambos
+conjuntos da **longitud 9**. Se extrae de cada secuencia la ventana de longitud 9 a
+partir del ancla, conservando las variantes (mutaciones puntuales).
+
+### Matriz de frecuencias y consenso
+Por cada posicion del alineamiento se cuentan A, C, G y T. El consenso elige la base
+mas frecuente por posicion; cuando una columna presenta **3 o mas bases distintas**
+se usa notacion degenerada entre corchetes (p. ej. `[ACT]`). Esta convencion
+reproduce el consenso `TACGATG[ACT]C` del marco teorico.
+
+### Conservacion
+La conservacion de una posicion es `100 * (base mas frecuente) / (numero de
+secuencias)`. La conservacion global es el promedio de las posiciones.
+
+## 3. Resultados - Ejercicio principal (10 secuencias)
+
+**Paso 2 - k-mers candidatos.** Como las secuencias son cortas y limpias, el ranking
+ingenuo y el discriminante coinciden. Los k-mers de mayor cobertura (10/10) provienen
+todos de la misma region: para k = 7 son `TACGATG`, `ACGATGA`, `CGATGAC`; para k = 9
+el candidato es `TACGATGAC` (10/10).
+
+**Paso 3 - Ocurrencias.** El ancla `TACGATG` aparece en las 10 secuencias en la
+posicion 4 (base 0). Rango `[4, 4]`: ocurrencias en regiones identicas.
+
+**Paso 4 y 5 - Extraccion y alineamiento.** La region extraida (longitud 9) es
+`TACGATGAC` en las 10 secuencias; las 9 columnas estan totalmente conservadas.
+
+**Paso 6 y 7 - Matriz de frecuencias y consenso.**
+
+| Pos | A | C | G | T | Consenso |
+|-----|---|---|---|---|----------|
+| 1 | 0 | 0 | 0 | 10 | T |
+| 2 | 10 | 0 | 0 | 0 | A |
+| 3 | 0 | 10 | 0 | 0 | C |
+| 4 | 0 | 0 | 10 | 0 | G |
+| 5 | 10 | 0 | 0 | 0 | A |
+| 6 | 0 | 0 | 0 | 10 | T |
+| 7 | 0 | 0 | 10 | 0 | G |
+| 8 | 10 | 0 | 0 | 0 | A |
+| 9 | 0 | 10 | 0 | 0 | C |
+
+**Secuencia consenso: `TACGATGAC`**
+
+**Paso 8 - Conservacion.** Todas las posiciones al 100 %. **Conservacion global:
+100.0 %.** No hay posiciones variables.
+
+**Paso 9 - Reporte del motif.** Longitud 9, consenso `TACGATGAC`, presente en
+**10/10** secuencias, todas en la posicion 4.
+
+![Matriz de frecuencias - Ejercicio principal](output/heatmap_ejercicio1.png)
+
+![Conservacion por posicion - Ejercicio principal](output/conservacion_ejercicio1.png)
+
+## 4. Resultados - Anexo 1 (8 secuencias)
+
+**Paso 2 - k-mers candidatos.** Las secuencias son largas y muy repetitivas. El
+**ranking ingenuo** lo dominan repetidos de fondo (`CGTAGCT` total = 77,
+`GTAGCTA` total = 75, ... todos con cobertura 8/8), que **no** son el motif. El
+**ranking discriminante** aisla el motif:
+
+| k | Candidato | Cobertura | Total |
+|---|-----------|-----------|-------|
+| 7 | `TACGATG` | 8/8 | 8 |
+| 8 | `TACGATGA` | 6/8 | 6 |
+| 9 | `TACGATGAC` | 5/8 | 5 |
+
+Este contraste es el resultado clave del paso 2: en datos ruidosos la mayor
+frecuencia bruta no identifica el motif; hay que usar la cobertura y el hecho de que
+el motif aparece ~una vez por secuencia.
+
+**Paso 3 - Ocurrencias.** El ancla `TACGATG` aparece en las 8 secuencias, pero en
+posiciones dispersas (rango `[108, 125]`): el mismo motif esta embebido en distinto
+contexto.
+
+**Paso 4 y 5 - Extraccion y alineamiento.** Regiones extraidas (longitud 9):
+
+```
+S1  TACGATGAC
+S2  TACGATGAC
+S3  TACGATGAT
+S4  TACGATGAC
+S5  TACGATGTC
+S6  TACGATGAC
+S7  TACGATGCC
+S8  TACGATGAC
+    *******    <- columnas 1-7 conservadas; 8 y 9 variables
+```
+
+**Paso 6 y 7 - Matriz de frecuencias y consenso.**
+
+| Pos | A | C | G | T | Consenso |
+|-----|---|---|---|---|----------|
+| 1 | 0 | 0 | 0 | 8 | T |
+| 2 | 8 | 0 | 0 | 0 | A |
+| 3 | 0 | 8 | 0 | 0 | C |
+| 4 | 0 | 0 | 8 | 0 | G |
+| 5 | 8 | 0 | 0 | 0 | A |
+| 6 | 0 | 0 | 0 | 8 | T |
+| 7 | 0 | 0 | 8 | 0 | G |
+| 8 | 6 | 1 | 0 | 1 | [ACT] |
+| 9 | 0 | 7 | 0 | 1 | C |
+
+**Secuencia consenso: `TACGATG[ACT]C`**
+
+**Paso 8 - Conservacion.** Posiciones 1-7 al 100 %. Posicion 8: 75.0 %
+(variable: A(6) C(1) T(1)). Posicion 9: 87.5 % (variable: C(7) T(1)).
+**Conservacion global: 95.8 %.**
+
+**Paso 9 - Reporte del motif.** Longitud 9, consenso `TACGATG[ACT]C`, presente en
+**8/8** secuencias. Posiciones (base 0): S1=125, S2=108, S3=116, S4=116, S5=114,
+S6=119, S7=116, S8=120.
+
+![Matriz de frecuencias - Anexo 1](output/heatmap_anexo1.png)
+
+![Conservacion por posicion - Anexo 1](output/conservacion_anexo1.png)
+
+## 5. Conclusiones
+
+- Ambos conjuntos contienen el mismo motif conservado `TACGATG[ACT]C` (longitud 9),
+  con un nucleo `TACGATG` totalmente conservado y variacion puntual en las posiciones
+  8 y 9.
+- En el ejercicio principal el motif es identico en todas las secuencias
+  (conservacion global 100 %); en el Anexo 1 presenta mutaciones puntuales
+  (conservacion global 95.8 %).
+- La leccion metodologica del Anexo 1 es que, ante secuencias con ruido repetido, el
+  k-mer mas frecuente **no** es el motif: se necesita un criterio discriminante
+  (cobertura y aparicion ~una vez por secuencia) para aislarlo.
+
+## 6. Reproduccion
+
+```bash
+g++ -std=c++17 -O2 -Wall motif_discovery.cpp -o motif
+./motif                 # imprime el reporte y genera output/matriz_*.csv
+python3 visualizar.py   # genera los PNG y output/reporte.html
+```
+
+## 7. Codigo fuente
+
+A continuacion se incluye el codigo completo en formato texto.
+
+### 7.1. motif_discovery.cpp
+
+```cpp
 // ============================================================================
 // Laboratorio 8 - Descubrimiento de Motifs
 // Curso de Bioinformatica (EPCC - UNSA)
@@ -671,3 +859,221 @@ int main() {
                      "output/matriz_anexo1.csv");
     return 0;
 }
+```
+
+### 7.2. visualizar.py
+
+```python
+#!/usr/bin/env python3
+"""
+visualizar.py - Visualizaciones del Laboratorio 8 (Descubrimiento de Motifs).
+
+Lee los CSV que genera el core en C++ (output/matriz_*.csv) y produce, para cada
+conjunto de secuencias:
+  - un heatmap de la matriz de frecuencias (posicion x {A,C,G,T}),
+  - un grafico de barras del porcentaje de conservacion por posicion, y
+  - un informe HTML autocontenido (output/reporte.html) con las imagenes
+    embebidas en base64 (sin enlaces externos) y las tablas de resultados.
+
+Uso:
+    python3 visualizar.py
+"""
+
+import base64
+import csv
+import os
+
+import matplotlib
+matplotlib.use("Agg")  # backend sin ventana: solo escribe archivos PNG
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Carpeta donde el core deja los CSV y donde dejaremos las imagenes/HTML.
+DIR_SALIDA = "output"
+
+# Orden de bases usado en toda la matriz (coincide con el core en C++).
+BASES = ["A", "C", "G", "T"]
+
+# Conjuntos a visualizar: (id, titulo legible, ruta del CSV).
+CONJUNTOS = [
+    ("ejercicio1", "Ejercicio principal (10 secuencias)",
+     os.path.join(DIR_SALIDA, "matriz_ejercicio1.csv")),
+    ("anexo1", "Anexo 1 (8 secuencias)",
+     os.path.join(DIR_SALIDA, "matriz_anexo1.csv")),
+]
+
+
+def leer_matriz(ruta):
+    """Lee un CSV de matriz de frecuencias y devuelve una lista de filas (dict).
+
+    Cada fila tiene: posicion (int), A/C/G/T (int), consenso (str),
+    conservacion (float).
+    """
+    filas = []
+    with open(ruta, newline="") as f:
+        for fila in csv.DictReader(f):
+            filas.append({
+                "posicion": int(fila["posicion"]),
+                "A": int(fila["A"]),
+                "C": int(fila["C"]),
+                "G": int(fila["G"]),
+                "T": int(fila["T"]),
+                "consenso": fila["consenso"],
+                "conservacion": float(fila["conservacion"]),
+            })
+    return filas
+
+
+def consenso_completo(filas):
+    """Concatena los tokens de consenso por posicion (p. ej. TACGATG[ACT]C)."""
+    return "".join(fila["consenso"] for fila in filas)
+
+
+def heatmap_frecuencias(filas, titulo, ruta_png):
+    """Genera el heatmap de la matriz de frecuencias y lo guarda como PNG."""
+    posiciones = [fila["posicion"] for fila in filas]
+    # Matriz 4 x L: filas = bases, columnas = posiciones.
+    matriz = np.array([[fila[b] for fila in filas] for b in BASES])
+
+    fig, ax = plt.subplots(figsize=(1.1 * len(posiciones) + 2, 3.2))
+    im = ax.imshow(matriz, cmap="Blues", aspect="auto")
+
+    # Etiquetas de ejes.
+    ax.set_xticks(range(len(posiciones)))
+    etiquetas_x = [f"{p}\n{fila['consenso']}" for p, fila in zip(posiciones, filas)]
+    ax.set_xticklabels(etiquetas_x)
+    ax.set_yticks(range(len(BASES)))
+    ax.set_yticklabels(BASES)
+    ax.set_xlabel("Posicion / consenso")
+    ax.set_ylabel("Base")
+    ax.set_title(f"Matriz de frecuencias - {titulo}")
+
+    # Anotar el conteo en cada celda.
+    maximo = matriz.max() if matriz.size else 1
+    for i in range(matriz.shape[0]):
+        for j in range(matriz.shape[1]):
+            valor = matriz[i, j]
+            color = "white" if valor > maximo / 2 else "black"
+            ax.text(j, i, str(valor), ha="center", va="center", color=color)
+
+    fig.colorbar(im, ax=ax, label="Frecuencia")
+    fig.tight_layout()
+    fig.savefig(ruta_png, dpi=120)
+    plt.close(fig)
+
+
+def grafico_conservacion(filas, titulo, ruta_png):
+    """Genera el grafico de barras de conservacion por posicion (PNG)."""
+    posiciones = [fila["posicion"] for fila in filas]
+    valores = [fila["conservacion"] for fila in filas]
+    # Verde para posiciones totalmente conservadas, naranja para variables.
+    colores = ["#2ca02c" if v >= 100.0 else "#ff7f0e" for v in valores]
+
+    fig, ax = plt.subplots(figsize=(1.1 * len(posiciones) + 2, 3.2))
+    barras = ax.bar(range(len(posiciones)), valores, color=colores)
+    ax.set_xticks(range(len(posiciones)))
+    ax.set_xticklabels([f"{p}\n{fila['consenso']}"
+                        for p, fila in zip(posiciones, filas)])
+    ax.set_ylim(0, 109)
+    ax.set_ylabel("Conservacion (%)")
+    ax.set_xlabel("Posicion / consenso")
+    ax.set_title(f"Conservacion por posicion - {titulo}")
+
+    # Linea de referencia del 100% y etiquetas de valor.
+    ax.axhline(100, color="gray", linestyle="--", linewidth=0.8)
+    for rect, v in zip(barras, valores):
+        ax.text(rect.get_x() + rect.get_width() / 2, v + 1,
+                f"{v:.1f}", ha="center", va="bottom", fontsize=8)
+
+    fig.tight_layout()
+    fig.savefig(ruta_png, dpi=120)
+    plt.close(fig)
+
+
+def png_a_base64(ruta_png):
+    """Codifica un PNG en base64 para embeberlo directamente en el HTML."""
+    with open(ruta_png, "rb") as f:
+        return base64.b64encode(f.read()).decode("ascii")
+
+
+def tabla_html(filas):
+    """Construye la tabla HTML de la matriz de frecuencias y conservacion."""
+    cabecera = ("<tr><th>Pos</th><th>A</th><th>C</th><th>G</th><th>T</th>"
+                "<th>Consenso</th><th>Conservacion</th></tr>")
+    cuerpo = ""
+    for fila in filas:
+        resaltado = "" if fila["conservacion"] >= 100.0 else ' class="var"'
+        cuerpo += (f"<tr{resaltado}><td>{fila['posicion']}</td>"
+                   f"<td>{fila['A']}</td><td>{fila['C']}</td>"
+                   f"<td>{fila['G']}</td><td>{fila['T']}</td>"
+                   f"<td>{fila['consenso']}</td>"
+                   f"<td>{fila['conservacion']:.1f}%</td></tr>")
+    return f"<table>{cabecera}{cuerpo}</table>"
+
+
+def main():
+    secciones = []
+    for id_conj, titulo, ruta_csv in CONJUNTOS:
+        if not os.path.exists(ruta_csv):
+            print(f"Aviso: no existe {ruta_csv}. Ejecuta primero ./motif")
+            continue
+
+        filas = leer_matriz(ruta_csv)
+        ruta_heat = os.path.join(DIR_SALIDA, f"heatmap_{id_conj}.png")
+        ruta_cons = os.path.join(DIR_SALIDA, f"conservacion_{id_conj}.png")
+        heatmap_frecuencias(filas, titulo, ruta_heat)
+        grafico_conservacion(filas, titulo, ruta_cons)
+
+        consenso = consenso_completo(filas)
+        global_pct = sum(f["conservacion"] for f in filas) / len(filas)
+        n_conservadas = sum(1 for f in filas if f["conservacion"] >= 100.0)
+        print(f"{titulo}: consenso={consenso}  global={global_pct:.1f}%  "
+              f"posiciones 100%={n_conservadas}/{len(filas)}")
+
+        secciones.append(f"""
+        <section>
+          <h2>{titulo}</h2>
+          <p><b>Secuencia consenso:</b> <code>{consenso}</code> &nbsp;|&nbsp;
+             <b>Longitud:</b> {len(filas)} &nbsp;|&nbsp;
+             <b>Conservacion global:</b> {global_pct:.1f}% &nbsp;|&nbsp;
+             <b>Posiciones 100%:</b> {n_conservadas}/{len(filas)}</p>
+          <img src="data:image/png;base64,{png_a_base64(ruta_heat)}" alt="heatmap">
+          <img src="data:image/png;base64,{png_a_base64(ruta_cons)}" alt="conservacion">
+          {tabla_html(filas)}
+        </section>""")
+
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Laboratorio 8 - Descubrimiento de Motifs</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 2rem; color: #222; }}
+    h1 {{ color: #1f4e79; }}
+    h2 {{ color: #2e6da4; border-bottom: 2px solid #ddd; padding-bottom: 4px; }}
+    section {{ margin-bottom: 3rem; }}
+    img {{ max-width: 100%; height: auto; display: block; margin: 1rem 0; }}
+    table {{ border-collapse: collapse; margin-top: 1rem; }}
+    th, td {{ border: 1px solid #ccc; padding: 4px 10px; text-align: center; }}
+    th {{ background: #1f4e79; color: #fff; }}
+    tr.var {{ background: #fff3e0; }}
+    code {{ background: #f0f0f0; padding: 2px 6px; border-radius: 4px; }}
+  </style>
+</head>
+<body>
+  <h1>Laboratorio 8 - Descubrimiento de Motifs</h1>
+  <p>Motif conservado identificado en cada conjunto de secuencias. Las filas
+     resaltadas indican posiciones con variacion (mutaciones puntuales).</p>
+  {''.join(secciones)}
+</body>
+</html>"""
+
+    ruta_html = os.path.join(DIR_SALIDA, "reporte.html")
+    with open(ruta_html, "w") as f:
+        f.write(html)
+    print(f"Informe HTML generado en: {ruta_html}")
+
+
+if __name__ == "__main__":
+    main()
+```
