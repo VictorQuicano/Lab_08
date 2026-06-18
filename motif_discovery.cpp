@@ -674,29 +674,20 @@ string identificadorArchivo(const string& ruta) {
 }
 
 int main(int argc, char* argv[]) {
-    // Cada argumento de la linea de comandos es la ruta de un archivo FASTA con
-    // las secuencias a analizar; se procesan todos los que se indiquen. El CSV
-    // de salida se nombra a partir del archivo de entrada (output/matriz_<id>.csv).
-    // Sin argumentos se procesan los dos conjuntos por defecto del laboratorio.
-    vector<string> rutas;
-    for (int i = 1; i < argc; ++i) {
-        rutas.push_back(argv[i]);
+    // El programa recibe exactamente un archivo FASTA con las secuencias a
+    // analizar. El CSV de salida se nombra a partir del archivo de entrada
+    // (output/matriz_<nombre>.csv).
+    if (argc != 2) {
+        cerr << "Uso: " << argv[0] << " <archivo.fasta>\n";
+        return 1;
     }
 
-    if (rutas.empty()) {
-        cout << "Uso: " << argv[0] << " <archivo1.fasta> [archivo2.fasta ...]\n";
-        cout << "Sin argumentos se procesan los conjuntos por defecto "
-                "(data/ejercicio1.fasta y data/anexo1.fasta).\n\n";
-        rutas = {"data/ejercicio1.fasta", "data/anexo1.fasta"};
-    }
-
-    for (const string& ruta : rutas) {
-        string id = identificadorArchivo(ruta);
-        string titulo = id;
-        transform(titulo.begin(), titulo.end(), titulo.begin(),
-                  [](unsigned char c) { return toupper(c); });
-        string rutaCSV = "output/matriz_" + id + ".csv";
-        procesarConjunto(titulo, ruta, rutaCSV);
-    }
+    string ruta = argv[1];
+    string id = identificadorArchivo(ruta);
+    string titulo = id;
+    transform(titulo.begin(), titulo.end(), titulo.begin(),
+              [](unsigned char c) { return toupper(c); });
+    string rutaCSV = "output/matriz_" + id + ".csv";
+    procesarConjunto(titulo, ruta, rutaCSV);
     return 0;
 }

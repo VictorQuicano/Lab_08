@@ -24,12 +24,11 @@ lab_08/
 # 1. Compilar el core
 g++ -std=c++17 -O2 -Wall motif_discovery.cpp -o motif
 
-# 2. Ejecutar indicando el/los archivo(s) FASTA a analizar. El CSV de salida se
-#    nombra a partir del archivo de entrada (output/matriz_<nombre>.csv).
-./motif data/ejercicio1.fasta data/anexo1.fasta
-
-#    Sin argumentos se procesan los dos conjuntos por defecto del laboratorio:
-./motif
+# 2. Ejecutar indicando el archivo FASTA a analizar (un archivo por ejecucion).
+#    El CSV de salida se nombra a partir del archivo de entrada
+#    (output/matriz_<nombre>.csv).
+./motif data/ejercicio1.fasta
+./motif data/anexo1.fasta
 
 # 3. Generar las visualizaciones y el informe HTML a partir de los CSV
 python3 visualizar.py
