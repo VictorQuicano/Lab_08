@@ -25,6 +25,7 @@
 #include <map>
 #include <set>
 #include <algorithm>
+#include <iomanip>
 
 using namespace std;
 
@@ -455,6 +456,98 @@ string consenso(const MatrizFrecuencias& m) {
     return resultado;
 }
 
+// ----------------------------------------------------------------------------
+// Pasos 8 y 9 del laboratorio: evaluacion de la conservacion y reporte del motif.
+// ----------------------------------------------------------------------------
+
+// Porcentaje de conservacion de cada posicion: frecuencia de la base mas comun
+// dividida entre el numero de secuencias, en porcentaje (0..100).
+vector<double> conservacionPorPosicion(const MatrizFrecuencias& m) {
+    vector<double> pct(m.L, 0.0);
+    for (int col = 0; col < m.L; ++col) {
+        int mejor = 0;
+        for (int b = 0; b < 4; ++b) mejor = max(mejor, m.conteo[col][b]);
+        pct[col] = m.numSecuencias > 0
+                       ? 100.0 * mejor / m.numSecuencias
+                       : 0.0;
+    }
+    return pct;
+}
+
+// Conservacion global del motif: promedio de la conservacion de sus posiciones.
+double conservacionGlobal(const vector<double>& pct) {
+    if (pct.empty()) return 0.0;
+    double suma = 0.0;
+    for (double v : pct) suma += v;
+    return suma / pct.size();
+}
+
+// Devuelve las bases observadas en una columna como texto, p. ej. "A(6) C(1) T(1)".
+string basesObservadas(const MatrizFrecuencias& m, int col) {
+    string s;
+    for (int b = 0; b < 4; ++b) {
+        if (m.conteo[col][b] > 0) {
+            if (!s.empty()) s += " ";
+            s += string(1, BASES[b]) + "(" + to_string(m.conteo[col][b]) + ")";
+        }
+    }
+    return s;
+}
+
+// Imprime el porcentaje de conservacion por posicion, las posiciones totalmente
+// conservadas (100%), las variables (con sus bases) y la conservacion global.
+void mostrarConservacion(const MatrizFrecuencias& m) {
+    vector<double> pct = conservacionPorPosicion(m);
+    cout << "    Conservacion por posicion:\n";
+    for (int col = 0; col < m.L; ++col) {
+        cout << "      Pos " << (col + 1) << ": " << fixed << setprecision(1)
+             << pct[col] << "%";
+        if (pct[col] < 100.0) {
+            cout << "  (variable: " << basesObservadas(m, col) << ")";
+        }
+        cout << "\n";
+    }
+
+    cout << "    Posiciones totalmente conservadas (100%): ";
+    bool primera = true;
+    for (int col = 0; col < m.L; ++col) {
+        if (pct[col] >= 100.0) {
+            cout << (primera ? "" : ", ") << (col + 1);
+            primera = false;
+        }
+    }
+    cout << "\n";
+
+    cout << "    Posiciones variables: ";
+    primera = true;
+    for (int col = 0; col < m.L; ++col) {
+        if (pct[col] < 100.0) {
+            cout << (primera ? "" : ", ") << (col + 1);
+            primera = false;
+        }
+    }
+    if (primera) cout << "(ninguna)";
+    cout << "\n";
+
+    cout << "    Conservacion global del motif: " << fixed << setprecision(1)
+         << conservacionGlobal(pct) << "%\n";
+}
+
+// Imprime el reporte final del motif: longitud, consenso, posicion en cada
+// secuencia y numero de secuencias que lo contienen.
+void reportarMotif(const vector<Region>& regiones, const MatrizFrecuencias& m,
+                   int numTotalSecuencias) {
+    cout << "    Longitud del motif: " << m.L << "\n";
+    cout << "    Secuencia consenso: " << consenso(m) << "\n";
+    cout << "    Secuencias que contienen el motif: " << regiones.size() << "/"
+         << numTotalSecuencias << "\n";
+    cout << "    Posicion del motif en cada secuencia (base 0):\n";
+    for (const Region& r : regiones) {
+        cout << "      " << r.nombre << ": " << r.posicion << "  (" << r.bases
+             << ")\n";
+    }
+}
+
 int main() {
     // Demo de los pasos 1-2: leer cada conjunto y listar k-mers candidatos.
     vector<string> rutas = {"data/ejercicio1.fasta", "data/anexo1.fasta"};
@@ -492,6 +585,10 @@ int main() {
         cout << "  [Paso 6] Matriz de frecuencias\n";
         mostrarMatriz(m);
         cout << "  [Paso 7] Secuencia consenso: " << consenso(m) << "\n";
+        cout << "  [Paso 8] Evaluacion del grado de conservacion\n";
+        mostrarConservacion(m);
+        cout << "  [Paso 9] Reporte del motif encontrado\n";
+        reportarMotif(regiones, m, static_cast<int>(secuencias.size()));
         cout << "\n";
     }
 
