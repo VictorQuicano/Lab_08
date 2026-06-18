@@ -302,6 +302,82 @@ void mostrarOcurrencias(const vector<Secuencia>& secuencias, const string& ancla
     }
 }
 
+// ----------------------------------------------------------------------------
+// Pasos 4 y 5 del laboratorio: extraccion de la region conservada y
+// alineamiento multiple.
+// ----------------------------------------------------------------------------
+
+// Una region del motif extraida de una secuencia concreta.
+struct Region {
+    string nombre;  // secuencia de origen
+    int posicion;   // posicion (base 0) donde empieza la region
+    string bases;   // subsecuencia extraida (longitud = longitud del motif)
+};
+
+// Determina la longitud del motif extendiendo el ancla hacia la derecha. Se
+// agrega una base mas mientras exista un k-mer que tenga el ancla como prefijo
+// y siga apareciendo en al menos 2 secuencias (sigue conservado). Se limita a
+// k = 9 porque el laboratorio prueba k = 7, 8 y 9. En ambos conjuntos da 9.
+int determinarLongitudMotif(const vector<Secuencia>& secuencias,
+                            const string& ancla, int maxK = 9) {
+    int L = static_cast<int>(ancla.size());
+    for (int k = L + 1; k <= maxK; ++k) {
+        vector<EstadKmer> estad = estadisticasKmers(secuencias, k);
+        int mejorCobertura = 0;
+        for (const EstadKmer& e : estad) {
+            // El k-mer debe empezar exactamente con el ancla (extension a la derecha).
+            if (e.kmer.compare(0, ancla.size(), ancla) == 0) {
+                mejorCobertura = max(mejorCobertura, e.cobertura);
+            }
+        }
+        if (mejorCobertura >= 2) {
+            L = k;  // el prefijo conservado sigue presente, extendemos
+        } else {
+            break;  // ya no esta conservado, detenemos la extension
+        }
+    }
+    return L;
+}
+
+// Extrae de cada secuencia la region del motif: ubica el ancla y toma una
+// ventana de longitud 'longitud' a partir de ahi. Se conservan las variantes
+// (no se corrigen las mutaciones puntuales). Las secuencias donde el ancla no
+// aparece, o donde la ventana se saldria del limite, se omiten.
+vector<Region> extraerRegiones(const vector<Secuencia>& secuencias,
+                               const string& ancla, int longitud) {
+    vector<Region> regiones;
+    for (const Secuencia& s : secuencias) {
+        int p = primeraPosicion(ancla, s.bases);
+        if (p < 0) continue;
+        if (p + longitud > static_cast<int>(s.bases.size())) continue;
+        regiones.push_back(Region{s.nombre, p, s.bases.substr(p, longitud)});
+    }
+    return regiones;
+}
+
+// Imprime las regiones extraidas apiladas (alineamiento multiple por columnas)
+// con una linea de marcas: '*' si la columna esta totalmente conservada y ' '
+// si presenta variacion entre las secuencias.
+void mostrarAlineamiento(const vector<Region>& regiones) {
+    if (regiones.empty()) return;
+    int L = static_cast<int>(regiones.front().bases.size());
+
+    for (const Region& r : regiones) {
+        cout << "    " << r.nombre << "\t" << r.bases << "\n";
+    }
+    // Linea de conservacion por columna.
+    cout << "    conserv.\t";
+    for (int col = 0; col < L; ++col) {
+        char base = regiones.front().bases[col];
+        bool conservada = true;
+        for (const Region& r : regiones) {
+            if (r.bases[col] != base) { conservada = false; break; }
+        }
+        cout << (conservada ? '*' : ' ');
+    }
+    cout << "\n";
+}
+
 int main() {
     // Demo de los pasos 1-2: leer cada conjunto y listar k-mers candidatos.
     vector<string> rutas = {"data/ejercicio1.fasta", "data/anexo1.fasta"};
@@ -321,6 +397,18 @@ int main() {
         string ancla = seleccionarAncla(secuencias);
         cout << "  [Paso 3] Localizacion de ocurrencias\n";
         mostrarOcurrencias(secuencias, ancla);
+        cout << "\n";
+
+        int L = determinarLongitudMotif(secuencias, ancla);
+        vector<Region> regiones = extraerRegiones(secuencias, ancla, L);
+        cout << "  [Paso 4] Extraccion de la region conservada (longitud "
+             << L << ")\n";
+        for (const Region& r : regiones) {
+            cout << "    " << r.nombre << " (pos " << r.posicion << "): "
+                 << r.bases << "\n";
+        }
+        cout << "  [Paso 5] Alineamiento multiple de las regiones\n";
+        mostrarAlineamiento(regiones);
         cout << "\n";
     }
 
