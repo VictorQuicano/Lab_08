@@ -215,6 +215,93 @@ void mostrarCandidatos(const vector<Secuencia>& secuencias, int k, int topN) {
     }
 }
 
+// ----------------------------------------------------------------------------
+// Paso 3 del laboratorio: localizacion de las ocurrencias.
+// ----------------------------------------------------------------------------
+
+// Devuelve todas las posiciones (indice base 0) donde aparece 'patron' dentro
+// de 'secuencia'. Una lista vacia significa que no aparece.
+vector<int> todasPosiciones(const string& patron, const string& secuencia) {
+    vector<int> posiciones;
+    if (patron.empty()) return posiciones;
+    size_t desde = 0;
+    while (true) {
+        size_t p = secuencia.find(patron, desde);
+        if (p == string::npos) break;
+        posiciones.push_back(static_cast<int>(p));
+        desde = p + 1;  // permitir solapamientos
+    }
+    return posiciones;
+}
+
+// Devuelve la primera posicion de 'patron' en 'secuencia', o -1 si no aparece.
+int primeraPosicion(const string& patron, const string& secuencia) {
+    size_t p = secuencia.find(patron);
+    return (p == string::npos) ? -1 : static_cast<int>(p);
+}
+
+// Selecciona el k-mer ancla (k = 7) que sirve de nucleo conservado para
+// localizar el motif. Criterio: maxima cobertura (presente en mas secuencias)
+// y, a igualdad de cobertura, el que aparece mas a la izquierda en promedio,
+// porque ese nucleo marca el inicio del motif y la region se extiende hacia la
+// derecha. En ambos conjuntos esto selecciona TACGATG.
+string seleccionarAncla(const vector<Secuencia>& secuencias) {
+    vector<EstadKmer> disc = rankingDiscriminante(estadisticasKmers(secuencias, 7));
+    if (disc.empty()) return "";
+
+    int maxCobertura = disc.front().cobertura;  // ya viene ordenado por cobertura
+    string ancla;
+    double mejorPosMedia = 1e18;
+
+    for (const EstadKmer& e : disc) {
+        if (e.cobertura != maxCobertura) continue;
+        // Posicion media de la primera ocurrencia en las secuencias donde aparece.
+        long sumaPos = 0;
+        int conteo = 0;
+        for (const Secuencia& s : secuencias) {
+            int p = primeraPosicion(e.kmer, s.bases);
+            if (p >= 0) { sumaPos += p; ++conteo; }
+        }
+        double media = (conteo > 0) ? static_cast<double>(sumaPos) / conteo : 1e18;
+        if (media < mejorPosMedia) {
+            mejorPosMedia = media;
+            ancla = e.kmer;
+        }
+    }
+    return ancla;
+}
+
+// Imprime, para el ancla elegida, su posicion en cada secuencia y comprueba si
+// las ocurrencias caen en regiones similares.
+void mostrarOcurrencias(const vector<Secuencia>& secuencias, const string& ancla) {
+    cout << "  Ancla conservada (nucleo del motif): " << ancla << "\n";
+    cout << "  Posicion (base 0) de la ocurrencia en cada secuencia:\n";
+    int presentes = 0, minPos = 1e9, maxPos = -1;
+    for (const Secuencia& s : secuencias) {
+        vector<int> pos = todasPosiciones(ancla, s.bases);
+        cout << "    " << s.nombre << ": ";
+        if (pos.empty()) {
+            cout << "(no aparece)";
+        } else {
+            for (size_t i = 0; i < pos.size(); ++i) {
+                cout << pos[i] << (i + 1 < pos.size() ? ", " : "");
+            }
+            ++presentes;
+            minPos = min(minPos, pos.front());
+            maxPos = max(maxPos, pos.front());
+        }
+        cout << "\n";
+    }
+    cout << "  Aparece en " << presentes << "/" << secuencias.size()
+         << " secuencias. Rango de la primera posicion: [" << minPos << ", "
+         << maxPos << "]";
+    if (maxPos - minPos <= 5) {
+        cout << " -> ocurrencias en regiones muy similares.\n";
+    } else {
+        cout << " -> posiciones dispersas (motif embebido en distinto contexto).\n";
+    }
+}
+
 int main() {
     // Demo de los pasos 1-2: leer cada conjunto y listar k-mers candidatos.
     vector<string> rutas = {"data/ejercicio1.fasta", "data/anexo1.fasta"};
@@ -230,6 +317,11 @@ int main() {
             mostrarCandidatos(secuencias, k, 5);
             cout << "\n";
         }
+
+        string ancla = seleccionarAncla(secuencias);
+        cout << "  [Paso 3] Localizacion de ocurrencias\n";
+        mostrarOcurrencias(secuencias, ancla);
+        cout << "\n";
     }
 
     return 0;
