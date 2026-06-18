@@ -548,49 +548,125 @@ void reportarMotif(const vector<Region>& regiones, const MatrizFrecuencias& m,
     }
 }
 
-int main() {
-    // Demo de los pasos 1-2: leer cada conjunto y listar k-mers candidatos.
-    vector<string> rutas = {"data/ejercicio1.fasta", "data/anexo1.fasta"};
-    vector<int> kValores = {7, 8, 9};
+// ----------------------------------------------------------------------------
+// Exportacion de resultados a CSV (para las visualizaciones en Python).
+// ----------------------------------------------------------------------------
 
-    for (const string& ruta : rutas) {
-        vector<Secuencia> secuencias = leerFasta(ruta);
-        cout << "==================================================\n";
-        cout << "Archivo: " << ruta
-             << "  (" << secuencias.size() << " secuencias)\n";
-        cout << "==================================================\n";
-        for (int k : kValores) {
-            mostrarCandidatos(secuencias, k, 5);
-            cout << "\n";
+// Devuelve el token de consenso de cada posicion por separado, p. ej.
+// {"T","A","C","G","A","T","G","[ACT]","C"}. Reutiliza la misma logica que
+// consenso() pero columna por columna.
+vector<string> consensoPorPosicion(const MatrizFrecuencias& m) {
+    vector<string> tokens;
+    for (int col = 0; col < m.L; ++col) {
+        int distintas = 0, mejorBase = 0, mejorConteo = -1;
+        for (int b = 0; b < 4; ++b) {
+            if (m.conteo[col][b] > 0) distintas++;
+            if (m.conteo[col][b] > mejorConteo) {
+                mejorConteo = m.conteo[col][b];
+                mejorBase = b;
+            }
         }
-
-        string ancla = seleccionarAncla(secuencias);
-        cout << "  [Paso 3] Localizacion de ocurrencias\n";
-        mostrarOcurrencias(secuencias, ancla);
-        cout << "\n";
-
-        int L = determinarLongitudMotif(secuencias, ancla);
-        vector<Region> regiones = extraerRegiones(secuencias, ancla, L);
-        cout << "  [Paso 4] Extraccion de la region conservada (longitud "
-             << L << ")\n";
-        for (const Region& r : regiones) {
-            cout << "    " << r.nombre << " (pos " << r.posicion << "): "
-                 << r.bases << "\n";
+        if (distintas >= 3) {
+            string grupo = "[";
+            for (int b = 0; b < 4; ++b)
+                if (m.conteo[col][b] > 0) grupo += BASES[b];
+            grupo += "]";
+            tokens.push_back(grupo);
+        } else {
+            tokens.push_back(string(1, BASES[mejorBase]));
         }
-        cout << "  [Paso 5] Alineamiento multiple de las regiones\n";
-        mostrarAlineamiento(regiones);
-        cout << "\n";
+    }
+    return tokens;
+}
 
-        MatrizFrecuencias m = matrizFrecuencias(regiones);
-        cout << "  [Paso 6] Matriz de frecuencias\n";
-        mostrarMatriz(m);
-        cout << "  [Paso 7] Secuencia consenso: " << consenso(m) << "\n";
-        cout << "  [Paso 8] Evaluacion del grado de conservacion\n";
-        mostrarConservacion(m);
-        cout << "  [Paso 9] Reporte del motif encontrado\n";
-        reportarMotif(regiones, m, static_cast<int>(secuencias.size()));
-        cout << "\n";
+// Escribe la matriz de frecuencias a un CSV con una fila por posicion:
+// posicion,A,C,G,T,consenso,conservacion. Lo consume visualizar.py.
+void exportarMatrizCSV(const MatrizFrecuencias& m, const string& ruta) {
+    ofstream out(ruta);
+    if (!out.is_open()) {
+        cerr << "Error: no se pudo escribir " << ruta << "\n";
+        return;
+    }
+    vector<double> pct = conservacionPorPosicion(m);
+    vector<string> tokens = consensoPorPosicion(m);
+    out << "posicion,A,C,G,T,consenso,conservacion\n";
+    for (int col = 0; col < m.L; ++col) {
+        out << (col + 1);
+        for (int b = 0; b < 4; ++b) out << "," << m.conteo[col][b];
+        out << "," << tokens[col] << ","
+            << fixed << setprecision(1) << pct[col] << "\n";
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Pipeline completo: ejecuta los 9 pasos sobre un conjunto de secuencias,
+// imprime el reporte y exporta el CSV de resultados.
+// ----------------------------------------------------------------------------
+void procesarConjunto(const string& titulo, const string& rutaFasta,
+                      const string& rutaCSV) {
+    vector<Secuencia> secuencias = leerFasta(rutaFasta);
+    cout << "============================================================\n";
+    cout << titulo << "  (" << secuencias.size() << " secuencias, archivo "
+         << rutaFasta << ")\n";
+    cout << "============================================================\n";
+
+    if (secuencias.empty()) {
+        cout << "No se leyeron secuencias; se omite el conjunto.\n\n";
+        return;
     }
 
+    // Paso 2: k-mers candidatos para k = 7, 8 y 9.
+    cout << "[Paso 2] Identificacion de k-mers candidatos\n";
+    for (int k : {7, 8, 9}) {
+        mostrarCandidatos(secuencias, k, 5);
+    }
+    cout << "\n";
+
+    // Paso 3: localizacion de ocurrencias del ancla conservada.
+    string ancla = seleccionarAncla(secuencias);
+    cout << "[Paso 3] Localizacion de ocurrencias\n";
+    mostrarOcurrencias(secuencias, ancla);
+    cout << "\n";
+
+    // Paso 4: extraccion de la region conservada.
+    int L = determinarLongitudMotif(secuencias, ancla);
+    vector<Region> regiones = extraerRegiones(secuencias, ancla, L);
+    cout << "[Paso 4] Extraccion de la region conservada (longitud " << L << ")\n";
+    for (const Region& r : regiones) {
+        cout << "    " << r.nombre << " (pos " << r.posicion << "): "
+             << r.bases << "\n";
+    }
+    cout << "\n";
+
+    // Paso 5: alineamiento multiple.
+    cout << "[Paso 5] Alineamiento multiple de las regiones\n";
+    mostrarAlineamiento(regiones);
+    cout << "\n";
+
+    // Pasos 6 y 7: matriz de frecuencias y consenso.
+    MatrizFrecuencias m = matrizFrecuencias(regiones);
+    cout << "[Paso 6] Matriz de frecuencias\n";
+    mostrarMatriz(m);
+    cout << "[Paso 7] Secuencia consenso: " << consenso(m) << "\n\n";
+
+    // Pasos 8 y 9: conservacion y reporte final.
+    cout << "[Paso 8] Evaluacion del grado de conservacion\n";
+    mostrarConservacion(m);
+    cout << "\n[Paso 9] Reporte del motif encontrado\n";
+    reportarMotif(regiones, m, static_cast<int>(secuencias.size()));
+    cout << "\n";
+
+    // Exportar resultados para las visualizaciones.
+    exportarMatrizCSV(m, rutaCSV);
+    cout << "Matriz exportada a: " << rutaCSV << "\n\n";
+}
+
+int main() {
+    // Ejercicio principal (10 secuencias) y Anexo 1 (8 secuencias). El mismo
+    // pipeline resuelve ambos conjuntos (ejercicio 10 del laboratorio).
+    procesarConjunto("EJERCICIO PRINCIPAL", "data/ejercicio1.fasta",
+                     "output/matriz_ejercicio1.csv");
+    procesarConjunto("ANEXO 1", "data/anexo1.fasta",
+                     "output/matriz_anexo1.csv");
     return 0;
 }
