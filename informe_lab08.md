@@ -175,7 +175,9 @@ S6=119, S7=116, S8=120.
 
 ```bash
 g++ -std=c++17 -O2 -Wall motif_discovery.cpp -o motif
-./motif                 # imprime el reporte y genera output/matriz_*.csv
+# El archivo FASTA a analizar se pasa como argumento; el CSV de salida se nombra
+# a partir de el (output/matriz_<nombre>.csv). Sin argumentos usa los dos por defecto.
+./motif data/ejercicio1.fasta data/anexo1.fasta
 python3 visualizar.py   # genera los PNG y output/reporte.html
 ```
 
@@ -850,13 +852,42 @@ void procesarConjunto(const string& titulo, const string& rutaFasta,
     cout << "Matriz exportada a: " << rutaCSV << "\n\n";
 }
 
-int main() {
-    // Ejercicio principal (10 secuencias) y Anexo 1 (8 secuencias). El mismo
-    // pipeline resuelve ambos conjuntos (ejercicio 10 del laboratorio).
-    procesarConjunto("EJERCICIO PRINCIPAL", "data/ejercicio1.fasta",
-                     "output/matriz_ejercicio1.csv");
-    procesarConjunto("ANEXO 1", "data/anexo1.fasta",
-                     "output/matriz_anexo1.csv");
+// Extrae el identificador de un archivo: nombre base sin directorio ni
+// extension. Ejemplo: "data/anexo1.fasta" -> "anexo1". Sirve para nombrar el
+// CSV de salida a partir del archivo de entrada.
+string identificadorArchivo(const string& ruta) {
+    size_t inicio = ruta.find_last_of("/\\");
+    inicio = (inicio == string::npos) ? 0 : inicio + 1;
+    size_t fin = ruta.find_last_of('.');
+    if (fin == string::npos || fin < inicio) fin = ruta.size();
+    return ruta.substr(inicio, fin - inicio);
+}
+
+int main(int argc, char* argv[]) {
+    // Cada argumento de la linea de comandos es la ruta de un archivo FASTA con
+    // las secuencias a analizar; se procesan todos los que se indiquen. El CSV
+    // de salida se nombra a partir del archivo de entrada (output/matriz_<id>.csv).
+    // Sin argumentos se procesan los dos conjuntos por defecto del laboratorio.
+    vector<string> rutas;
+    for (int i = 1; i < argc; ++i) {
+        rutas.push_back(argv[i]);
+    }
+
+    if (rutas.empty()) {
+        cout << "Uso: " << argv[0] << " <archivo1.fasta> [archivo2.fasta ...]\n";
+        cout << "Sin argumentos se procesan los conjuntos por defecto "
+                "(data/ejercicio1.fasta y data/anexo1.fasta).\n\n";
+        rutas = {"data/ejercicio1.fasta", "data/anexo1.fasta"};
+    }
+
+    for (const string& ruta : rutas) {
+        string id = identificadorArchivo(ruta);
+        string titulo = id;
+        transform(titulo.begin(), titulo.end(), titulo.begin(),
+                  [](unsigned char c) { return toupper(c); });
+        string rutaCSV = "output/matriz_" + id + ".csv";
+        procesarConjunto(titulo, ruta, rutaCSV);
+    }
     return 0;
 }
 ```

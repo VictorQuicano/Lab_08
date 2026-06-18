@@ -21,14 +21,20 @@ lab_08/
 ## Uso
 
 ```bash
-# 1. Compilar y ejecutar el core (genera los CSV en output/)
+# 1. Compilar el core
 g++ -std=c++17 -O2 -Wall motif_discovery.cpp -o motif
+
+# 2. Ejecutar indicando el/los archivo(s) FASTA a analizar. El CSV de salida se
+#    nombra a partir del archivo de entrada (output/matriz_<nombre>.csv).
+./motif data/ejercicio1.fasta data/anexo1.fasta
+
+#    Sin argumentos se procesan los dos conjuntos por defecto del laboratorio:
 ./motif
 
-# 2. Generar las visualizaciones y el informe HTML a partir de los CSV
+# 3. Generar las visualizaciones y el informe HTML a partir de los CSV
 python3 visualizar.py
 
-# 3. Abrir output/reporte.html en el navegador
+# 4. Abrir output/reporte.html en el navegador
 ```
 
 El motif conservado esperado es `TACGATG[ACT]C` (longitud 9): las primeras siete
