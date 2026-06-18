@@ -378,6 +378,83 @@ void mostrarAlineamiento(const vector<Region>& regiones) {
     cout << "\n";
 }
 
+// ----------------------------------------------------------------------------
+// Pasos 6 y 7 del laboratorio: matriz de frecuencias y secuencia consenso.
+// ----------------------------------------------------------------------------
+
+// Matriz de frecuencias por posicion. conteo[pos] guarda el numero de
+// apariciones de A, C, G y T (en ese orden) en esa columna del alineamiento.
+struct MatrizFrecuencias {
+    int L = 0;                      // longitud del motif (numero de columnas)
+    int numSecuencias = 0;          // numero de regiones alineadas (filas)
+    vector<vector<int>> conteo;     // conteo[L][4], orden de bases = "ACGT"
+};
+
+// Indice de una base dentro del orden "ACGT" (0..3), o -1 si no es valida.
+int indiceBase(char c) {
+    size_t p = BASES.find(c);
+    return (p == string::npos) ? -1 : static_cast<int>(p);
+}
+
+// Construye la matriz de frecuencias contando, por cada posicion del
+// alineamiento, cuantas veces aparece cada nucleotido.
+MatrizFrecuencias matrizFrecuencias(const vector<Region>& regiones) {
+    MatrizFrecuencias m;
+    if (regiones.empty()) return m;
+    m.L = static_cast<int>(regiones.front().bases.size());
+    m.numSecuencias = static_cast<int>(regiones.size());
+    m.conteo.assign(m.L, vector<int>(4, 0));
+
+    for (const Region& r : regiones) {
+        for (int col = 0; col < m.L; ++col) {
+            int idx = indiceBase(r.bases[col]);
+            if (idx >= 0) m.conteo[col][idx]++;
+        }
+    }
+    return m;
+}
+
+// Imprime la matriz de frecuencias como una tabla posicion x {A,C,G,T}.
+void mostrarMatriz(const MatrizFrecuencias& m) {
+    cout << "    Pos\tA\tC\tG\tT\n";
+    for (int col = 0; col < m.L; ++col) {
+        cout << "    " << (col + 1);
+        for (int b = 0; b < 4; ++b) cout << "\t" << m.conteo[col][b];
+        cout << "\n";
+    }
+}
+
+// Obtiene la secuencia consenso. Por cada posicion se elige la base mas
+// frecuente. Cuando la columna presenta 3 o mas bases distintas (variabilidad
+// real) se usa notacion degenerada entre corchetes con todas las bases
+// observadas, p. ej. [ACT]; con una sola base se reporta esa base y con dos
+// (mutacion puntual) se reporta la mas frecuente. Esta convencion reproduce el
+// consenso TACGATG[ACT]C del marco teorico.
+string consenso(const MatrizFrecuencias& m) {
+    string resultado;
+    for (int col = 0; col < m.L; ++col) {
+        int distintas = 0, mejorBase = 0, mejorConteo = -1;
+        for (int b = 0; b < 4; ++b) {
+            if (m.conteo[col][b] > 0) distintas++;
+            if (m.conteo[col][b] > mejorConteo) {
+                mejorConteo = m.conteo[col][b];
+                mejorBase = b;
+            }
+        }
+        if (distintas >= 3) {
+            string grupo = "[";
+            for (int b = 0; b < 4; ++b) {
+                if (m.conteo[col][b] > 0) grupo += BASES[b];
+            }
+            grupo += "]";
+            resultado += grupo;
+        } else {
+            resultado += BASES[mejorBase];
+        }
+    }
+    return resultado;
+}
+
 int main() {
     // Demo de los pasos 1-2: leer cada conjunto y listar k-mers candidatos.
     vector<string> rutas = {"data/ejercicio1.fasta", "data/anexo1.fasta"};
@@ -409,6 +486,12 @@ int main() {
         }
         cout << "  [Paso 5] Alineamiento multiple de las regiones\n";
         mostrarAlineamiento(regiones);
+        cout << "\n";
+
+        MatrizFrecuencias m = matrizFrecuencias(regiones);
+        cout << "  [Paso 6] Matriz de frecuencias\n";
+        mostrarMatriz(m);
+        cout << "  [Paso 7] Secuencia consenso: " << consenso(m) << "\n";
         cout << "\n";
     }
 
